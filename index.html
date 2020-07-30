@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<!-- Traveller 5 Citizen generator client-side javascript in single html file -->
+<!-- Algorithm from Traveller 5.10 Core Book 1
+<!-- The Traveller game in all forms is owned by Far Future Enterprises. Copyright 1977 – 2020 Far Future Enterprises. Traveller is a registered trademark of Far Future Enterprises. Far Future permits web sites and fanzines for this game, provided it contains this notice, that Far Future is notified, and subject to a withdrawal of permission on 90 days notice. The contents of this site are for personal, non-commercial use only. Any use of Far Future Enterprises’s copyrighted material or trademarks anywhere on this web site and its files should not be viewed as a challenge to those copyrights or trademarks. In addition, any program/articles/file on this site cannot be republished or distributed without the consent of the author who contributed it. -->
+<html>
+	<head>
+		<script type="text/javascript">
+			// global variables
+			const DEBUG_LEVELS = {silent:0,quiet:1,normal:2,verbose:3,debug:4,everything:5};
+			const DEBUG = DEBUG_LEVELS.quiet;
+			const EDUCATION_RESULT = {nostart:0,fail:1,dropout:2,inprogress:3,success:4};
+			const RETIREMENT_AGE = 66;
+			const DEFAULT_AGELIMIT = RETIREMENT_AGE;
+			const AGING_PHYSICAL = 34;
+			const AGING_MENTAL = 66;
+			// by default stop after age equals or exceeds this value
+			// n.b. also stop occurs when citizen life fails, or death due to aging occurs
+			// force retirement at retirement age
+//			// if retirement custom rule is true then apply probablity of retirement at end of term
+//			const CUSTOM_RETIREMENT = true;
+//			const CUSTOM_RETIREMENT_EARLY = 0.8; // proportion of retriement age to begin chance of early retirement
+
+			const YEARS_UNIVERSITY = 4;
+			const YEARS_COLLEGE = 4;
+			const YEARS_MASTERS = 2;
+			const YEARS_PROFESSORS = 2;
+			const YEARS_MEDICSCHOOL = 4;
+			const YEARS_LAWSCHOOL = 2;
+
+			const STR = "Strength";
+			const DEX = "Dexterity";
+			const END = "Endurance";
+			const INT = "Intelligence";
+			const EDU = "Education";
+			const SOC = "Social Standing";
+
+			const MAJOR = "Major";
+			const MINOR = "Minor";
+			const TRADE = "Trade";
+			const ART = "Art";
+			const SOLDIER = "Soldier";
+			const STARSHIP = "Starship";
+			const SCIENCE = "The Sciences";
+			const LANGUAGE = "Language";
+			const GRAV = "*:Grav"; // Grav appears in citizen skills table E on page 78 of book 1 - without specifying Flyer, Seafarer or Driver
+			const aGrav = new Array("Driver","Flyer","Seafarer");
+
+			// likelihood of changing to a different skill from within a group when adding a skill level from that group 
+			const PROB_CHANGE_ART = 0.5;
+			const PROB_CHANGE_TRADE = 0.2;
+			const PROB_CHANGE_SOLDIER = 0.4;
+			const PROB_CHANGE_STARSHIP = 0.3;
+			const PROB_CHANGE_SCIENCE = 0.3;
+
+			// const PROB_TRY_TRADESCHOOL = 1.0; // always try trade school if not college / university
+			const PROB_TRY_COLLEGE = 0.95; // if cannot / fail to get into university try college
+			const PROB_TRY_UNIVERSITY = 0.9; // if can then probability of trying for university
+			const PROB_TRY_MASTERS = 0.8; // if can then chance of try for masters - require BA
+			const PROB_TRY_PROFFESORS = 0.6; // if can then chance to try for PhD - require MA
+			const PROB_TRY_MEDIC = 0.4; // if can then chance to try for medical school - require BA Hons
+			const PROB_TRY_LAW = 0.4; // if can then chance to try for Law - require BA Hons
+			const PROB_MAJOR_BONUS = 0.35; // if major in relevant law or medic at college/university then apply bonus chance to try for relevant school
+			const PROB_MINOR_BONUS = 0.3; // if minor in relevant law or medic at college/university then apply bonus chance to try for relevant school
+			// const PROB_TRY_HONORS = 1.0; // always try honors for BA
+			const PROB_MAJOR_JOB = 0.7; // chance if have major to try to use that for job, else try minor
+			const PROB_MAJOR_HOBBY = 0.3; // chance if major to try to use that for hobby
+			const PROB_MOD_HOBBY = 0.4; // modify chance for major as hobby if job is not major
+			const PROB_MEDICLAW_JOB = 0.9; // if succesfully completed medic or law school chance of trying for job in relevant skill
+			const PROB_MEDICLAW_HOBBY = 0.2; // if succesfully completed medic or law school chance of trying for hobby in relevant skill - modified by mod hobby if job is not in relevant skill
+
+			const MAX_SKILL = 15;
+			const MAX_KNOWLEDGE = 6; 
+
+			// reference data arrays
+			// book 1, page 47, table UPP
+			const aCharacteristics = new Array( STR,DEX,END,INT,EDU,SOC);
+			// book 1, page 58
+			const aGenetics = new Array( STR,DEX,END,INT);
+			// book 1, page 56
+			const oHomeWorlds = {
+				"Alell":{WorldName:"Alell",Hex:"1706",Sector:"Spin",UWP:"B56789C-A",TradeClass:"Ph Pa Ri"},
+				"Boughene":{WorldName:"Boughene",Hex:"1904",Sector:"Spin",UWP:"A8B3531-D",TradeClass:"Fl Ni"},
+				"Capital":{WorldName:"Capital",Hex:"2118",Sector:"Core",UWP:"A586A98-F",TradeClass:"Hi Cx"},
+				"Dorannia":{WorldName:"Dorannia",Hex:"0530",Sector:"Spin",UWP:"E42158A-8",TradeClass:"He Ni Po"},
+				"Efate":{WorldName:"Efate",Hex:"1705",Sector:"Spin",UWP:"A646930-D",TradeClass:"Hi In"},
+				"Feri":{WorldName:"Feri",Hex:"2005",Sector:"Spin",UWP:"B584879-B",TradeClass:"Ph Pa Ri"},
+				"Magash":{WorldName:"Magash",Hex:"0316",Sector:"Dene",UWP:"A400976-F",TradeClass:"Va Hi Na In Cp"},
+				"Hefry":{WorldName:"Hefry",Hex:"1909",Sector:"Spin",UWP:"C200423-7",TradeClass:"Va Ni"},
+				"Jenghe":{WorldName:"Jenghe",Hex:"1810",Sector:"Spin",UWP:"C799663-9",TradeClass:"Ni"},
+				"Earth":{WorldName:"Earth",Hex:"1827",Sector:"Solo",UWP:"A867A69-F",TradeClass:"Ga Hi"},
+				"Lakou":{WorldName:"Lakou",Hex:"0638",Sector:"Spin",UWP:"E779454-7",TradeClass:"Ni Da"},
+				"Macene Belt":{WorldName:"Macene Belt",Hex:"2612",Sector:"Spin",UWP:"B000453-E",TradeClass:"As Ni"},
+				"Knorbes":{WorldName:"Knorbes",Hex:"1807",Sector:"Spin",UWP:"E888787-2",TradeClass:"Ag Ri An"},
+				"Preslin":{WorldName:"Preslin",Hex:"0633",Sector:"Dene",UWP:"B430679-C",TradeClass:"De Ni Na Po"},
+				"Yori":{WorldName:"Yori",Hex:"2110",Sector:"Spin",UWP:"C560757-A",TradeClass:"De Ri"},
+				"Regina":{WorldName:"Regina",Hex:"1910",Sector:"Spin",UWP:"A788899-C",TradeClass:"Ph Pa Ri"},
+				"Regina":{WorldName:"Regina",Hex:"1910",Sector:"Spin",UWP:"A788899-C",TradeClass:"Ph Pa Ri"},
+				"Regina":{WorldName:"Regina",Hex:"1910",Sector:"Spin",UWP:"A788899-C",TradeClass:"Ph Pa Ri"},
+				"Ruie":{WorldName:"Ruie",Hex:"1809",Sector:"Spin",UWP:"C776977-7",TradeClass:"Hi In"},
+				"Tremous Dex":{WorldName:"Tremous Dex",Hex:"1311",Sector:"Spin",UWP:"B511411-C",TradeClass:"Ic Ni"},
+				"Uakye":{WorldName:"Uakye",Hex:"1805",Sector:"Spin",UWP:"B439598-D",TradeClass:"Ni"},
+				"Vland":{WorldName:"Vland",Hex:"1717",Sector:"Vlan",UWP:"A967A9A-F",TradeClass:"Hi Cs"},
+				"Wroclaw":{WorldName:"Wroclaw",Hex:"0226",Sector:"Dene",UWP:"C5667BF-7",TradeClass:"Ag Ri"},
+				"Menorb":{WorldName:"Menorb",Hex:"1803",Sector:"Spin",UWP:"C652998-7",TradeClass:"Hi Po"},
+				"Yorbund":{WorldName:"Yorbund",Hex:"2303",Sector:"Spin",UWP:"C7C6503-9",TradeClass:"Fl Ni"},
+				"Traltha":{WorldName:"Traltha",Hex:"2834",Sector:"Spin",UWP:"B590630-6",TradeClass:"De He Ni An"},
+				"Dentus":{WorldName:"Dentus",Hex:"2201",Sector:"Spin",UWP:"C979500-A",TradeClass:"Ni"},
+				"Vanzeti":{WorldName:"Vanzeti",Hex:"0218",Sector:"Dene",UWP:"C52A531-C",TradeClass:"Wa Ni"},
+				"Syr Darya":{WorldName:"Syr Darya",Hex:"1810",Sector:"Dene",UWP:"E55769C-5",TradeClass:"Ni Ag"},
+				"Aramis":{WorldName:"Aramis",Hex:"3110",Sector:"Spin",UWP:"A5A0556-B",TradeClass:"He Ni Cp"},
+				"Rhylanor":{WorldName:"Rhylanor",Hex:"2716",Sector:"Spin",UWP:"A434934-F",TradeClass:"Hi Cp"},
+				"Raschev":{WorldName:"Raschev",Hex:"3230",Sector:"Fore",UWP:"C8697C4-6",TradeClass:"Ri"},
+				"Ara Pacis":{WorldName:"Ara Pacis",Hex:"0419",Sector:"Dene",UWP:"A437678-B",TradeClass:"Ni"},
+				"Roup":{WorldName:"Roup",Hex:"2007",Sector:"Spin",UWP:"C77A9A9-7",TradeClass:"Wa Hi In"},
+				"Pax Rulin":{WorldName:"Pax Rulin",Hex:"2204",Sector:"Troj",UWP:"A402231-E",TradeClass:"Ic Va Lo Cp"},
+				"Born in deep space":{WorldName:"Born in deep space",Hex:"",Sector:"",UWP:"",TradeClass:"Ds"}
+			};
+
+			// book 1, page 56
+			const oTradeClassSkills = {
+				"Ag":{TradeClass:"Ag",TradeClassification:"Agricultural",Skill:"Animals"},
+				"As":{TradeClass:"As",TradeClassification:"Asteroid",Skill:"Zero-G"},
+				"Co":{TradeClass:"Co",TradeClassification:"Cold",Skill:"Hostile environment"},
+				"Cp":{TradeClass:"Cp",TradeClassification:"Subsector Capital",Skill:"Admin"},
+				"Cs":{TradeClass:"Cs",TradeClassification:"Sector Capital",Skill:"Bureaucrat"},
+				"Cx":{TradeClass:"Cx",TradeClassification:"Capital",Skill:LANGUAGE},
+				"Da":{TradeClass:"Da",TradeClassification:"Dangerous",Skill:"Fighter"},
+				"De":{TradeClass:"De",TradeClassification:"Desert",Skill:"Survival"},
+				"Ds":{TradeClass:"Ds",TradeClassification:"Deep Space",Skill:"Vacc suit,Zero-G"},
+				"Fa":{TradeClass:"Fa",TradeClassification:"Farming",Skill:"Animals"},
+				"Fl":{TradeClass:"Fl",TradeClassification:"Fluid",Skill:"Hostile environment"},
+				"Fr":{TradeClass:"Fr",TradeClassification:"Frozen",Skill:"Hostile environment"},
+				"Ga":{TradeClass:"Ga",TradeClassification:"Garden World",Skill:"Trader"},
+				"He":{TradeClass:"He",TradeClassification:"Hellworld",Skill:"Hostile environment"},
+				"Hi":{TradeClass:"Hi",TradeClassification:"High Population",Skill:"Streetwise"},
+				"Ho":{TradeClass:"Ho",TradeClassification:"Hot",Skill:"Hostile environment"},
+				"Ic":{TradeClass:"Ic",TradeClassification:"Ice-Capped",Skill:"Vacc suit"},
+				"In":{TradeClass:"In",TradeClassification:"Industrial",Skill:TRADE},
+				"Lo":{TradeClass:"Lo",TradeClassification:"Low Population",Skill:"Flyer"},
+				"Mi":{TradeClass:"Mi",TradeClassification:"Mining",Skill:"Survey"},
+				"Na":{TradeClass:"Na",TradeClassification:"Non-agricultural",Skill:"Survey"},
+				"Ni":{TradeClass:"Ni",TradeClassification:"Non-industrial",Skill:"Driver"},
+				"Oc":{TradeClass:"Oc",TradeClassification:"Ocean World",Skill:"Hi-G"},
+				"Pa":{TradeClass:"Pa",TradeClassification:"Pre-Agricultural",Skill:"Trader"},
+				"Pi":{TradeClass:"Pi",TradeClassification:"Pre-Industrial",Skill:"JOT"},
+				"Po":{TradeClass:"Po",TradeClassification:"Poor",Skill:"Steward"},
+				"Pr":{TradeClass:"Pr",TradeClassification:"Pre-Rich",Skill:"Craftsman"},
+				"Ri":{TradeClass:"Ri",TradeClassification:"Rich",Skill:ART},
+				"Tr":{TradeClass:"Tr",TradeClassification:"Tropic",Skill:"Survival"},
+				"Tu":{TradeClass:"Tu",TradeClassification:"Tundra",Skill:"Survival"},
+				"Tz":{TradeClass:"Tz",TradeClassification:"Twilight Zone",Skill:"Driver"},
+				"Va":{TradeClass:"Va",TradeClassification:"Vacuum",Skill:"Vacc suit"},
+				"Wa":{TradeClass:"Wa",TradeClassification:"Water World",Skill:"Seafarer"}
+			};
+
+			// book 1, page 89
+			const aPhysicalAging = new Array(STR, DEX, END);
+
+			// book 1, page 132
+			const aDefaultSkills = new Array("Actor","Artist","Athlete","Author","Comms","Computer","Driver","Fighter","Gunner:Turrets","Mechanic","Steward","Vacc suit");
+			// book 1, page 132
+			const aStarshipSkills = new Array("Astrogator","Engineer","Gunner","Medic","Pilot","Sensors","Steward");
+			// book 1, page 132
+			const aSoldierSkills = new Array( "Fighter","Forward observer","Heavy weapons","Navigator","Recon","Sapper");
+			// book 1, page 132
+			const aArt = new Array( "Actor", "Artist", "Author","Chef","Dancer","Musician" );
+			// book 1, page 132
+			const aTrade = new Array("Biologics","Craftsman","Electronics","Fluidics","Gravitics","Magnetics","Mechanic","Photonics","Polymers","Programmer");
+
+			// book 1, page 132
+			const aKnowledges = new Array("Animals:Rider","Animals:Teamster","Animals:Trainer","Driver:ACV","Driver:Automotive","Driver:Grav","Driver:Legged","Driver:Mole","Driver:Tracked","Driver:Wheeled","Enginerr:Jump drives","Engineer:Life support","Engineer:Maneuver drive","Engineer:Power systems","Fighter:Battle dress","Fighter:Beams","Fighter:Blades","Fighter:Exotics","Fighter:Slug throwers","Fighter:Sprays","Fighter:Unarmed","Flyer:Aeronautics","Flyer:Flapper","Flyer:Grav","Flyer:LTA","Flyer:Rotor","Flyer:Winged","Gunner:Bay Weapons","Gunner:Ortillery","Gunner:Screens","Gunner:Spines","Gunner:Turrets","Heavy weapons:Artillery","Heavy weapons:Launcher","Heavy weapons:Ordnance","Heavy weapons:WMD","Pilot:Small Craft","Pilot:Spacecraft ACS","Pilot:Spacecraft BCS","Seafarer:Aquanautics","Seafarer:Grav","Seafarer:Boat","Seafarer:Ship","Seafarer:Submersible",":Archeology",":Biology",":Chemistry",":History",":Linguistics",":Philosophy",":Physics",":Planetology",":Psionicology",":Psychohistory",":Psychology",":Robotics",":Sophontology");
+
+			// book 1, page 132
+			const aAllSkills = new Array("Admin","Advocate","Animals","Athlete","Broker","Bureaucrat","Comms","Computer","Counsellor","Designer","Diplomat","Driver","Explosives","Fleet Tactics","Flyer","Forensics","Gambler","High-G","Hostile environment","JOT",LANGUAGE,"Leader","Liaison","Naval Architect","Seafarer","Stealth","Strategy","Streetwise","Survey","Survival","Tactics","Teacher","Trader","Vacc suit","Zero-G","Astrogator","Engineer","Gunner","Medic","Pilot","Sensors","Steward","Biologics","Craftsman","Electronics","Fluidics","Gravitics","Magnetics","Mechanic","Photonics","Polymers","Programmer","Actor","Artist","Author","Chef","Dancer","Musician","Fighter","Forward observer","Heavy weapons","Navigator","Recon","Sapper");
+			// book 1, page 132
+			const oKnowledges = {
+				"Animals":["Rider","Teamster","Trainer"],
+				"Driver":["ACV","Automotive","Grav","Legged","Mole","Tracked","Wheeled"],
+				"Engineer":["Jump drives","Life support","Maneuver drive","Power systems"],
+				"Fighter":["Battle dress","Beams","Blades","Exotics","Slug throwers","Sprays","Unarmed"],
+				"Flyer":["Aeronautics","Flapper","Grav","LTA","Rotor","Winged"],
+				"Gunner":["Bay Weapons","Ortillery","Screens","Spines","Turrets"],
+				"Heavy weapons":["Artillery","Launcher","Ordnance","WMD"],
+				"Pilot":["Small Craft","Spacecraft ACS","Spacecraft BCS"],
+				"Seafarer":["Aquanautics","Grav","Boat","Ship","Submersible"],
+				SCIENCE:["Archeology","Biology","Chemistry","History","Linguistics","Philosophy","Physics","Planetology","Psionicology","Psychohistory","Psychology","Robotics","Sophontology"]
+			};
+
+			const oMusterOut = {
+				"Money":["Low Psg","Low Psg","Mid Psg","High Psg","Cr 15000","StarPass","Cr 25000","Cr 30000","Cr 35000","Cr 40000", "Cr 50000"],
+				"Benefits":[STR,STR,"Wafer Jack",EDU,STR,DEX,END,INT,SOC,"TAS Fellow","Ship Share"],
+			}
+
+			// page 78 table C
+			const oCitizenSkills = {
+				"Personal":[STR,DEX,END,INT,EDU,SOC],
+				"Academic":[MAJOR,MAJOR,MINOR,MINOR,TRADE,TRADE],
+				"Travel":["Seafarer","Navigator","Hostile environment","Flyer","Driver","Vacc suit"],
+				"General":["Admin","Broker","Computer","Animals","Bureaucrat","Trader"],
+				"Business":["Advocate","Broker","Trader","Liaison","Counsellor","Teacher"],
+				"Vocation":[ART,SCIENCE,TRADE,"Driver","Bureaucrat","Computer"],
+				"Avocation":[ART,SCIENCE,"JOT","Athlete","Medic",TRADE]
+			}
+
+			// page 78 table E
+			const aCitizenSkills = new Array(
+				"Driver:ACV","Comms","High-G","Steward","Heavy Weapons:Ordnance","Naval Architect",
+				"JOT","Animals:Rider","Sensors","Fwd Obs","Survival","Streetwise",
+				"Flyer:LTA","Gunner:Spines","Flyer:Flapper","Seafarer","No Skill","Astrogator",
+				"Heavy Weapons:WMD","Leader","Driver:Tracked","Engineer","Computer","Navigation",
+				"Chef","Survey","Animals","Fluidics","Gunner:Bay Weapons","Explosives",
+				"Driver:Mole","Dancer","Tactics","Heavy Weapons:Launcher","Magnetics","Engineer:Jump drives",
+				GRAV,"Artist","Gunner:Turrets","Animals:Teamster","Photonics","Counsellor",
+				"Seafarer:Boat","Driver:Legged","Teacher","Designer","Vacc Suit","Seafarer:Submersible",
+				"Seafarer:Ship","Sapper","Fighter:Unarmed","Engineer","Heavy Weapons:Artillery","Flyer:Aeronautics",
+				"Flyer:Winged","Driver","Fighter:Exotics",LANGUAGE,"Craftsman","Seafarer:Aquanautics",
+				"Recon","Gunner","Stealth","Musician","Gravitics","Fighter:Battle dress",
+				"Actor","Fighter:Blades","Animals:Trainer","Strategy","Forensics","Electronics",
+				"Flyer","Zero-G","Animals","Engineer:Maneuver drive","Biologics","Hostile Env",
+				"Pilot","Author","Liaison","Polymers","Gunner:Ortillery","Engineer:Power systems",
+				"Flyer:Rotor","Broker","Athlete","Advocate","Driver:Automotive","Engineer:Life support",
+				"Admin","Trader","Fighter","Computer","Bureaucrat","Fighter:Slug throwers",
+				"Fighter:Beams","Fighter:Sprays","Driver:Wheeled","Diplomat","Heavy Wpns","Fleet Tactics",
+				"Medic","Gambler","Gunner:Screens","Mechanic","Programmer","Pilot:Spacecraft ACS"
+			);
+
+			// in these arrays a colon associates skill:knowledge where necessary, pure knowledges has no skill
+			// e.g. to distinguish Driver:Grav, Flyer:Grav and Seafarer:Grav, where *:Grav means choose one of the three skills to go with Grav knowledge
+			// book 1, page 60
+			const aLawSchool = new Array("Advocate","Diplomat");
+			// book 1, page 60
+			const aMedicSchool = new Array("Forensics","Medic");
+			// book 1, page 60
+			const aCollegeUniversity = new Array("Athlete","Broker","Bureaucrat","Counsellor","Designer",LANGUAGE,"Teacher","Astrogator","Actor", "Artist", "Author","Chef","Dancer","Musician","Biologics","Craftsman","Electronics","Fluidics","Gravitics","Magnetics","Mechanic","Photonics","Polymers","Programmer","Driver:Automotive","Flyer:Aeronautics","Seafarer:Aquanautics",":Archeology",":Biology",":Chemistry",":History",":Linguistics",":Philosophy",":Physics",":Planetology",":Psionicology",":Psychohistory",":Psychology",":Robotics",":Sophontology");
+			// book 1, page 60
+			const aTradeSchool = new Array("Driver:ACV","Driver:Automotive","Driver:Grav","Driver:Legged","Driver:Mole","Driver:Tracked","Driver:Wheeled","Fighter:Blades","Fighter:Slug thrower","Fighter:Unarmed","Engineer:Jump Drives","Engineer:Life Support","Engineer:Maneuver Drive","Engineer:Power Systems","Robotics","Flyer:Aeronautics","Flyer:Flapper","Flyer:Grav","Flyer:LTA","Flyer:Rotor","Flyer:Winged","Pilot:Small Craft","Animals:Rider","Animals:Teamster","Animals:Trainer","Seafarer:Aquanautics","Seafarer:Grav","Seafarer:Boat","Seafarer:Ship","Seafarer:Sub","Admin","Comms","Computer","Explosives","High-G","Hostile environment",LANGUAGE,"Survey","Tactics","Trader","Vacc suit","Zero-G","Medic","Sensors","Steward","Forward observer","Navigation","Recon","Sapper","Biologics","Craftsman","Electronics","Fluidics","Gravitics","Magnetics","Mechanic","Photonics","Polymers","Programmer","Actor", "Artist", "Author","Chef","Dancer","Musician");
+
+			// utility functions
+			function eHex(value){
+				const hex = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+				var ret = "";
+				if (value >= hex.length){
+					var sub = Math.floor(value/hex.length);
+					ret = eHex(sub);
+					value -= sub * hex.length;
+				}
+				ret = ret + hex[value];
+				return ret;
+			}
+
+			function D6(dice){
+				if (dice === undefined)dice = 1;
+				log( "[+] rolling " + dice + " dice", DEBUG_LEVELS.debug );
+				var i;
+				var sum=0;
+				for ( i=0; i<dice; i++ ){
+					var roll = Math.floor( Math.random() * 6 ) + 1;
+					log( "[-] rolled " + roll, DEBUG_LEVELS.debug);
+					sum += roll;
+				}
+				log( "roll " + dice + "d6 = " + sum, DEBUG_LEVELS.verbose );
+				return sum;
+			}
+
+			function fnRandomFromArray(array)
+			{
+				return array[Math.floor(Math.random() * array.length)];
+			}
+
+			function fnRandomFromObject(object)
+			{
+				return object[Object.keys(object)[Math.floor(Math.random() * Object.keys(object).length)]];
+			}
+
+			function fnPopHighestCharacteristic(character){
+				var top = null;
+				log("Pop highest characteristic from " + character.aCheck, DEBUG_LEVELS.debug);
+				for (characteristic in character.aCheck){
+					if (top == null){
+						top = character.aCheck[characteristic];
+					} else {
+						if (character.characteristics[characteristic] > character.characteristics[top]){
+							top = character.aCheck[characteristic];
+						}
+					}
+				}
+				log(" taking " + top, DEBUG_LEVELS.debug);
+				character.aCheck.splice(top,1);
+				log(" which leaves " + character.aCheck, DEBUG_LEVELS.debug);
+				//delete character.aCheck[top];
+				return top;
+			}
+
+			function fnObjectToString(title,object,delim="\n",titledelim="\n")
+			{
+				var sret = title + titledelim;
+				for (const property in object) {
+					sret += property + " - " + object[property] + delim;
+				}
+				return sret;
+			}
+
+			function fnObjectToHex(title, object) {
+				var sret = title + " : ";
+				for (const property in object){
+					sret += eHex(object[property]);
+				}
+				sret += "\n";
+				return sret;
+			}
+
+			function fnArrayToHex(title, values) {
+				var sret = title + " : ";
+				for (const index in values){
+					sret += eHex(values[index]);
+				}
+				sret += "\n";
+				return sret;
+			}
+
+			function fnArraysToString( title, keys, values ){
+				var sret = title + "\n";
+				for (var index in values){
+					sret += keys[index] + " : " + values[index] + "\n";
+				}
+				return sret;
+			}
+
+			function log( msg, level=DEBUG_LEVELS.normal ) {
+				if (DEBUG >= level) console.log(msg);
+			}
+
+			// functions
+			function fnPickSkillFromList(fromArray, preferredSkill, chanceOfChange ){
+				if (preferredSkill === null) {
+					preferredSkill = fnRandomFromArray(fromArray);
+				} else {
+					if (Math.random() < chanceOfChange ){
+						preferredSkill = fnRandomFromArray(fromArray);
+					}
+				}
+				return preferredSkill;
+			}
+
+			function fnAddKnowledge(character,knowledge,blevel0=false,ineducation=false,skill=""){
+				log("fnAddKnowledge  '" + knowledge + "'", DEBUG_LEVELS.verbose);
+
+				if (ineducation==false){
+					// follow knowledge - knowledge - skill i.e. 3 levels of Blades, gets Blades-2, Fighter-1
+					// which skill is this knowledge from
+					var skillnamefound = false;
+					if (skill.length > 0){
+						skillname = skill;
+						skillnamefound = true;
+					} else {
+						for (skillname in oKnowledges){
+							if (oKnowledges[skillname].indexOf(knowledge) > -1){
+								skillnamefound = true;
+								log("Knowledge " + knowledge + " has associated skill " + skillname, DEBUG_LEVELS.debug);
+								break;
+							}
+						}
+					}
+					if (skillnamefound === true){
+						// SCIENCE is pure knowledge
+						if (skillname != "SCIENCE"){
+
+							if (skillname in character.oknown){
+								if(character.oknown[skillname]>1){
+									// already got 2 knowledges for this skill
+									log("already have two or more knowledges in the skill, adding the skill " + skillname);
+									fnAddSkill(character,skillname,blevel0);
+									return;
+								} else {
+									if (blevel0 == false){
+										// chalk up the knowledge before we add it
+										character.oknown[skillname]++;
+									}
+								}
+							} else {
+								if (blevel0 == false){
+									character.oknown[skillname] = 1;
+								}
+							}
+						}
+					}
+				}
+
+				// account for max knowledge level and cascade to specialisms
+				if (knowledge in character.knowledge) {
+					var count = 10;
+					var original = knowledge;
+					while (character.knowledge[knowledge] >= MAX_KNOWLEDGE){
+						log( knowledge + " level is " + character.knowledge[knowledge] );
+						// start with letters to avoid confusion
+						knowledge = original + "-" + eHex(count);
+						log( "trying to add level to " + knowledge );
+						count ++;
+					}
+				}
+
+				if (knowledge in character.knowledge) {
+					if (blevel0 === false) {
+						character.knowledge[knowledge] += 1;
+						log("increment knowledge " + knowledge + " to level " + character.knowledge[knowledge]);
+					}
+				} else {
+					if (blevel0 === true){
+						character.knowledge[knowledge] = 0;
+					} else {
+						character.knowledge[knowledge] = 1;
+					}
+					log("adding knowledge " + knowledge + " level " + character.knowledge[knowledge]);
+				}
+			}
+
+			function fnAddSkill(character,skillname,blevel0=false,ineducation=false){
+				log("fnAddSkill '" + skillname + "'",DEBUG_LEVELS.verbose);
+				
+				if (skillname.indexOf(":")<0){
+					if (aAllSkills.indexOf(skillname)<0){
+						log("is not in allskills", DEBUG_LEVELS.verbose);	
+
+						switch (skillname){
+							case TRADE:
+								skillname = fnPickSkillFromList(aTrade,character.trade,PROB_CHANGE_TRADE);
+								log("chose " + skillname + " from trade skills",DEBUG_LEVELS.verbose);
+								break;
+							case ART:
+								skillname = fnPickSkillFromList(aArt,character.art,PROB_CHANGE_ART);
+								log("chose " + skillname + " from art skills",DEBUG_LEVELS.verbose);
+								break;
+							case SOLDIER:
+								skillname = fnPickSkillFromList(aSoldierSkills,character.soldier,PROB_CHANGE_SOLDIER);
+								log("chose " + skillname + " from soldier skills",DEBUG_LEVELS.verbose);
+								break;
+							case STARSHIP:
+								skillname = fnPickSkillFromList(aStarshipSkills,character.starship,PROB_CHANGE_STARSHIP);
+								log("chose " + skillname + " from starship skills",DEBUG_LEVELS.verbose);
+								break;
+							case SCIENCE:
+								skillname = fnPickSkillFromList(oKnowledges["SCIENCE"],character.science,PROB_CHANGE_SCIENCE);
+								log("chose " + skillname + " from science knowledge",DEBUG_LEVELS.verbose);
+								break;
+							case MAJOR:
+								skillname = character.major;
+								log("adding major " + skillname,DEBUG_LEVELS.verbose);
+								break;
+							case MINOR:
+								skillname = character.minor;
+								log("adding minor " + skillname,DEBUG_LEVELS.verbose);
+								break;
+							default:
+								// unknown skill ?
+								// we really shouldn't land here
+								log("WARNING attempting to add unknown skill : " + skillname );
+								// is it a knowledge
+								if (aKnowledges.indexOf(skillname)>-1){
+									// add the knowledge
+									log("unknown skill " + skillname + " is knowledge" );
+								}
+						}
+					}							
+				}
+
+				// possible acquire major / minor when character has none - citizen gains nothing for that
+				if (skillname === null){
+					log("cannot add null skill - no skill acquired");
+					return;
+				}
+
+				// process any skill:knowledge
+				if (skillname.indexOf(":")>-1){
+					// this is a knowledge
+					log("caught adding skill:knowledge form", DEBUG_LEVELS.debug)
+					var parts = skillname.split(":");
+					var skill = parts[0];
+					var knowledge = parts[1];
+					// don't do this blindly
+					log("which is skill = " + skill + ", knowledge = " + knowledge, DEBUG_LEVELS.debug)
+					if (ineducation == false){
+						log("not in education", DEBUG_LEVELS.debug)
+						// if already has two knowledges in this skill then add skill ...
+						// unless in education which can grant knowledge only for relevant skills 
+						if (skill.length > 0){
+							if (skill in character.oknown){
+								if(character.oknown[skill]>1){
+									// already got 2 knowledges for this skill
+									log("already have two or more knowledges in the skill, adding the skill " + skill);
+									fnAddSkill(character,skill,blevel0);
+									return;
+								} else {
+									log("skill " + skill + " is known at level " + character.oknown[skill], DEBUG_LEVELS.debug);
+								}
+							} else {
+								log("skill " + skill + " is not known", DEBUG_LEVELS.debug);
+							}
+						}
+					}
+
+					if (knowledge.length > 0){
+						// we know here which skill if any is associated
+						fnAddKnowledge(character, knowledge, blevel0, ineducation, skill);
+						return;
+					} else {
+						// use the prefix if any ?
+						if (skill.length > 0) {
+							// relevant to a skill, continue that
+							skillname = skill;
+						} else {
+							// just a colon !?
+							log("ERROR FAIL add skill : '" + skillname + "'");
+							return;
+						}
+					}
+				}
+
+				if (aAllSkills.indexOf(skillname)<0){
+					log(skillname + " is not in allskills", DEBUG_LEVELS.verbose);
+					// if we are here and still do not have a valid skill name then it must be a knowledge
+					fnAddKnowledge(character, skillname, blevel0, ineducation);
+				} else {
+					// we must have a skill by now
+					if (blevel0 == false){
+						// want to follow knowledge, knowledge skill ...
+						if (skillname in oKnowledges){
+							log("skill " + skillname + " contains knowledges", DEBUG_LEVELS.debug);
+							if (skillname in character.oknown){
+								log("skill " + skillname + " is known", DEBUG_LEVELS.debug);
+								if (character.oknown[skillname] < 2){
+									log("skill " + skillname + " has " + character.oknown[skillname] + " knowledges known", DEBUG_LEVELS.debug);
+									knowledge = fnRandomFromArray(oKnowledges[skillname]);
+									fnAddKnowledge(character, knowledge, blevel0, ineducation, skillname);
+									character.oknown[skillname]++;
+									blevel0 = true; // add zero level skill
+								}
+							} else {
+								log("skill " + skillname + " is not known", DEBUG_LEVELS.debug);
+								knowledge = fnRandomFromArray(oKnowledges[skillname]);
+								log("chose " + knowledge + " from " + skillname, DEBUG_LEVELS.debug);
+								fnAddKnowledge(character, knowledge, blevel0, ineducation, skillname);
+								character.oknown[skillname] = 1;
+								blevel0 = true; // add zero level skill
+							}
+
+						}
+					}
+
+					if (skillname in character.skills) {
+						if (blevel0 == false) {
+							if (character.skills[skillname] < MAX_SKILL) {
+								character.skills[skillname] += 1;
+								log("incrementing skill " + skillname + " to level " + character.skills[skillname]);
+							}
+						}
+					} else {
+						if (blevel0 == true){
+							character.skills[skillname] = 0;
+						} else {
+							character.skills[skillname] = 1;
+						}
+						log("adding skill " + skillname + " level " + character.skills[skillname]);
+					}
+				}
+			}
+
+			function fnAddSkillLevels(character,skillname,levels=1,ineducation=false){
+				for (var l=0;l<levels;l++){
+					fnAddSkill(character, skillname,false,ineducation);
+				}
+			}
+
+			function roll(character, characteristic, characteristic2=null, waiverallowed=true){
+				// if second characteristic is passed choose to use the greater characterisitic of the two for the check
+				if (characteristic2 != null){
+					log("choice of roll against " + characteristic + " : " + character.characteristics[characteristic] + " or " + characteristic2 + " : " + character.characteristics[characteristic2], DEBUG_LEVELS.debug)
+					if (character.characteristics[characteristic2] > character.characteristics[characteristic]){
+						characteristic = characteristic2;
+					}
+				}
+
+				log("roll against " + characteristic + " : " + character.characteristics[characteristic],DEBUG_LEVELS.debug)
+				if (character.characteristics[characteristic] >= D6(2)){
+					log( "success", DEBUG_LEVELS.verbose );
+					return true;
+				} else {
+					log( "failure", DEBUG_LEVELS.verbose );
+				}
+
+				// try for waiver
+				if (waiverallowed === true){
+					if (character.waiver > 1){
+						log( "attempting waiver against : " + character.waiver, DEBUG_LEVELS.debug )
+						if (character.waiver >= D6(2)){
+							log( "waiver success", DEBUG_LEVELS.verbose );
+							character.waiver--;
+							return true;
+						} else {
+							log( "waiver failure", DEBUG_LEVELS.verbose );
+							character.waiver--;
+						}
+					}
+				}
+
+				return false;
+			}
+			
+			function fnGenerateCharacteristics(character){
+				for (var characteristic in aCharacteristics){
+					log(aCharacteristics[characteristic], DEBUG_LEVELS.debug);
+					var value = D6();
+					if (aGenetics.indexOf(aCharacteristics[characteristic]) > -1 ){
+						character.genetics[aCharacteristics[characteristic]] = value;
+					}
+					value += D6();
+					character.characteristics[aCharacteristics[characteristic]] = value;
+				}
+
+				log(fnObjectToHex("initial UPP",character.characteristics));
+				log(fnObjectToString("Initial Characteristics",character.characteristics), DEBUG_LEVELS.verbose);
+				log(fnObjectToHex("initial DNA",character.genetics));
+				log(fnObjectToString("Genetic characteristics",character.genetics), DEBUG_LEVELS.verbose);
+			}
+
+			function fnChooseHomeworld(character, homeworld){
+				if (homeworld === undefined){
+					character.homeworld = fnRandomFromObject(oHomeWorlds);
+				} else {
+					if (homeworld in oHomeWorlds){
+						character.homeworld = oHomeWorlds[homeworld];
+					} else {
+						character.homeworld = fnRandomFromObject(oHomeWorlds);
+					}
+				}
+				log(fnObjectToString("Homeworld",character.homeworld));
+			}
+
+			function fnAddDefaultAndHomeworldSkills(character){
+				log("add default skills at level 0");
+				for (var index in aDefaultSkills){
+					fnAddSkill(character, aDefaultSkills[index], true);
+				}
+
+				log("add any homeworld skills at level 1");
+				for (var tc in character.homeworld.TradeClass.split(" ")){
+					var stc = character.homeworld.TradeClass.split(" ")[tc];
+					if (stc in oTradeClassSkills) {
+						var skillsToAdd = oTradeClassSkills[stc].Skill.split(",");
+						for (var skill in skillsToAdd){
+							fnAddSkill(character, skillsToAdd[skill]);
+						}
+					}
+				}
+
+				log(fnObjectToString("Default and homeworld skills",character.skills), DEBUG_LEVELS.verbose);
+				log(fnObjectToString("Default and homeworld knowledge",character.knowledge), DEBUG_LEVELS.verbose);
+			}
+
+			function fnAge(character, years=1){
+				// handle aging
+				character.age+=years;
+
+				if (character.age >= AGING_PHYSICAL){
+					// physical aging
+					// check STR DEX END
+					var count = 0;
+					for (characteristic in aPhysicalAging){
+						if ((character.age - AGING_PHYSICAL)%4 == 0){
+							if ( D6(2) < fnLifeStageFromAge(character.age)){
+								// aged
+								log("failed aging, lose " + aPhysicalAging[characteristic], DEBUG_LEVELS.verbose);
+								character.characteristics[aPhysicalAging[characteristic]]--;
+								if (character.characteristics[aPhysicalAging[characteristic]] < 1){
+									character.characteristics[aPhysicalAging[characteristic]] = 1;
+									count ++;
+								}
+							}
+						}
+					}
+					if(character.age >= AGING_MENTAL){
+						if ((character.age - AGING_MENTAL)%4 == 0){
+							if ( D6(2) < fnLifeStageFromAge(character.age)){
+								// aged
+								log("failed aging, lose Intelligence", DEBUG_LEVELS.verbose);
+								character.characteristics[INT]--;
+								if (character.characteristics[INT] < 1){
+									character.characteristics[INT] = 1;
+									count ++;
+								}
+							}
+						}
+					}
+					switch (count){
+						case 4:
+						case 3:
+							if (character.majorillness == true){
+								log( "another extremely major ilness at age " + character.age + " resulting in death" );
+								character.dead = true;
+								return false;
+							} else {
+								log( "extremely major ilness at age " + character.age );
+								character.majorillness = true;
+							}
+							break;
+						case 2:
+							log( "major ilness at age " + character.age );
+							break;
+					}
+				}
+
+				if (fnRetirementReached(character)) return false;
+				if (fnAgeLimitReached(character)) return false;
+
+				return true;
+			}
+
+			function fnAgeLimitReached(character){
+				if (character.age >= character.agelimit) {
+					log("age limit " + character.agelimit + " reached at " + character.age);
+					return true;
+				}
+				return false;
+			}
+
+			function fnRetirementReached(character){
+				if (character.age >= RETIREMENT_AGE){
+					character.retired = true;
+					return true;
+				}
+				return false;
+			}
+
+			// book 1, page 89
+			function fnLifeStageFromAge(years){
+				return Math.floor((years + 6) / 8);
+			}
+
+			function fnEd5(character){
+				if (character.characteristics[EDU] < 5){
+					log( "Trying ED5", DEBUG_LEVELS.verbose);
+					// no waiver allowed?
+					if (roll(character, INT, null, false)){
+						log( "ED5 success");
+						character.history += "ED5 at age " + character.age + "\n";
+						character.characteristics[EDU] = 5;
+						return EDUCATION_RESULT.success;
+					}
+					return EDUCATION_RESULT.fail;
+				}
+
+				// not normal structure for these education functions ...
+				return EDUCATION_RESULT.nostart;
+			}
+
+			function fnTryUniversity(character){
+				log("try enroll university", DEBUG_LEVELS.verbose);
+				if (roll(character, INT, EDU) === false){
+					return EDUCATION_RESULT.fail;
+				}
+
+				log("start university");
+				character.history += "University start at age " + character.age;
+
+				// choose major and minor
+				character.major = fnRandomFromArray(aCollegeUniversity);
+
+				var minor = fnRandomFromArray(aCollegeUniversity);
+				while (minor == character.major){
+					minor = fnRandomFromArray(aCollegeUniversity);
+				}
+				character.minor = minor;
+
+				log("Major : " + character.major + "\n" + "Minor : " + character.minor);
+				character.history += ", major in " + character.major + ", minor in "  + character.minor;
+				var passes = 0;
+				for ( var year=1; year <= YEARS_UNIVERSITY; year++ ){
+					log( "University year " + year, DEBUG_LEVELS.verbose);
+					if (roll(character,INT,EDU) === true){
+						passes++;
+						log( "pass University year " + year, DEBUG_LEVELS.verbose);
+						fnAddSkill(character,character.major,false,true);
+						if (passes % 2 === 0){
+							fnAddSkill(character, character.minor,false,true);
+						}
+					} else {
+						log( "fail University year " + year, DEBUG_LEVELS.verbose);
+						fnAge(character);
+						log("dropout university at year " + year);
+						character.history += ", dropped out during year " + year + " at age " + character.age + "\n";
+						return EDUCATION_RESULT.dropout;
+					}
+					if (fnAge(character) == false){
+						log("agelimit reached, at end of university year " + year + " at age " + character.age)
+						if (year < YEARS_UNIVERSITY){
+							character.history += ", still in university\n";
+							return EDUCATION_RESULT.inprogress;
+						}
+					}
+				}
+
+				// graduate
+				if (character.characteristics[EDU] < 9){
+					character.characteristics[EDU] = 9;
+				} else {
+					character.characteristics[EDU]++;
+				}
+				character.history += ", graduate university at age " + character.age + "\n";
+				log("end university", DEBUG_LEVELS.verbose);
+				return EDUCATION_RESULT.success;
+			}
+
+			function fnTryCollege(character){
+				log("try enroll college", DEBUG_LEVELS.verbose);
+
+				if (roll(character, INT, EDU) === false){
+					return EDUCATION_RESULT.fail;
+				}
+
+				log("start college");
+				character.history += "College start at age " + character.age;
+				// if university dropout then try for same major minor else choose major and minor
+				if (character.major === null){
+					character.major = fnRandomFromArray(aCollegeUniversity);
+				}
+				if (character.minor === null){
+					var minor = fnRandomFromArray(aCollegeUniversity);
+					while (minor == character.major){
+						minor = fnRandomFromArray(aCollegeUniversity);
+					}
+					character.minor = minor;
+				}
+
+				log("Major : " + character.major + "\n" + "Minor : " + character.minor);
+				character.history += ", major in " + character.major + ", minor in "  + character.minor;
+
+				var passes = 0;
+				for ( var year=1; year <= YEARS_COLLEGE; year++ ){
+					log( "college year " + year, DEBUG_LEVELS.verbose);
+					if (roll(character,INT,EDU) === true){
+						passes++;
+						log( "pass college year " + year, DEBUG_LEVELS.verbose);
+						fnAddSkill(character,character.major,false,true);
+						if (passes % 2 === 0){
+							fnAddSkill(character, character.minor,false,true);
+						}
+					} else {
+						log( "fail college year " + year, DEBUG_LEVELS.verbose);
+						fnAge(character);
+						character.history += ", dropped out during year " + year + " at age " + character.age + "\n";
+						return EDUCATION_RESULT.dropout;
+					}
+					if (fnAge(character) == false){
+						log("agelimit reached, at end of college year " + year + " at age " + character.age)
+						if (year < YEARS_UNIVERSITY){
+							character.history += ", still in college\n";
+							return EDUCATION_RESULT.inprogress;
+						}
+					}
+				}
+
+				// graduate college
+				if (character.characteristics[EDU] < 8){
+					character.characteristics[EDU] = 8;
+				} else {
+					character.characteristics[EDU]++;
+				}
+
+				character.history += ", graduate college at age " + character.age + "\n";
+				log("end college", DEBUG_LEVELS.verbose);
+				return EDUCATION_RESULT.success;
+			}
+
+			function fnTryHonors(character){
+				log("try enrol honors", DEBUG_LEVELS.verbose);
+				if (roll(character,INT,EDU)){
+					fnAddSkill(character, character.major,false,true);
+					log("success honors", DEBUG_LEVELS.verbose);
+					character.history += "Gained Honors degree\n";
+					return EDUCATION_RESULT.success;
+				}
+				log("failed honors", DEBUG_LEVELS.verbose);
+				return EDUCATION_RESULT.fail;
+			}
+
+			function fnTryMasters(character){
+				log("try enrol masters", DEBUG_LEVELS.verbose);
+
+				if (roll(character,INT,EDU) === false){
+					return EDUCATION_RESULT.fail;
+				}
+
+				log("start masters");
+				character.history += "Masters start at age " + character.age;
+
+				var passes = 0;
+				for ( var year=1; year <= YEARS_MASTERS; year++ ){
+					log( "masters year " + year, DEBUG_LEVELS.verbose);
+					if (roll(character,INT,EDU) === true){
+						passes++;
+						log( "pass masters year " + year, DEBUG_LEVELS.verbose);
+						fnAddSkill(character,character.major,false,true);
+						if (passes % 2 === 0){
+							fnAddSkill(character, character.minor,false,true);
+						}
+					} else {
+						log( "fail masters year " + year, DEBUG_LEVELS.verbose);
+						fnAge(character);
+						log( "dropout masters at year" + year);
+						character.history += ", dropped out during year " + year + " at age " + character.age + "\n";
+						return EDUCATION_RESULT.dropout;
+					}
+					if (fnAge(character) == false){
+						log("agelimit reached, at end of masters year " + year + " at age " + character.age)
+						if (year < YEARS_MASTERS){
+							character.history += ", still in masters\n";
+							return EDUCATION_RESULT.inprogress;
+						}
+					}
+				}
+
+				// graduate masters
+				if (character.characteristics[EDU] < 9){
+					character.characteristics[EDU] = 9;
+				} else {
+					character.characteristics[EDU]++;
+				}
+
+				log("end masters", DEBUG_LEVELS.verbose);
+				character.history += ", graduate masters at age " + character.age + "\n";
+				return EDUCATION_RESULT.success;
+			}
+
+			function fnTryProfessors(character){
+				log("try enrol professors", DEBUG_LEVELS.verbose);
+				if (roll(character,INT,EDU) === false){
+					return EDUCATION_RESULT.fail;
+				}
+
+				log("start professors");
+				character.history += "Professors start at age " + character.age;
+
+				var passes = 0;
+				for ( var year=1; year <= YEARS_PROFESSORS; year++ ){
+					log( "professors year " + year, DEBUG_LEVELS.debug);
+					if (roll(character,INT,EDU) === true){
+						passes++;
+						log( "pass professors year " + year, DEBUG_LEVELS.verbose);
+						fnAddSkill(character,character.major,false,true);
+						if (passes % 2 === 0){
+							fnAddSkill(character, character.minor,false,true);
+						}
+					} else {
+						log( "fail professors year " + year, DEBUG_LEVELS.verbose);
+						fnAge(character);
+						log( "professors dropout at year " + year);
+						character.history += ", dropped out during year " + year + " at age " + character.age + "\n";
+						return EDUCATION_RESULT.dropout;
+					}
+					if (fnAge(character) == false){
+						log("agelimit reached, at end of professors year " + year + " at age " + character.age)
+						if (year < YEARS_PROFESSORS) return EDUCATION_RESULT.inprogress;
+					}
+				}
+
+				// graduate professors
+				if (character.characteristics[EDU] < 12){
+					character.characteristics[EDU] = 12;
+				} else {
+					character.characteristics[EDU]++;
+				}
+
+				log("end professors", DEBUG_LEVELS.verbose);
+				character.history += ", graduate professors at age " + character.age + "\n";
+				return EDUCATION_RESULT.success;
+			}
+
+			function fnTryMedicSchool(character){
+				// requires four successes
+				log("try enrol medic school", DEBUG_LEVELS.verbose);
+				if (roll(character,INT,EDU) === false){
+					return EDUCATION_RESULT.fail;
+				}
+
+				log("start medic school");
+				character.history += "Medic school start at age " + character.age;
+
+				var passes = 0;
+				for ( var year=1; year <= YEARS_MEDICSCHOOL; year++ ){
+					log( "medic school year " + year, DEBUG_LEVELS.verbose);
+					if (roll(character,INT,EDU) === true){
+						passes++;
+						log( "pass medic school year " + year, DEBUG_LEVELS.verbose);
+					} else {
+						log( "fail medic school year " + year, DEBUG_LEVELS.verbose);
+						fnAge(character);
+						log( "medic school dropout at year" + year);
+						character.history += ", dropped out during year " + year + " at age " + character.age + "\n";
+						return EDUCATION_RESULT.dropout;
+					}
+					if (fnAge(character) == false){
+						log("agelimit reached, at end of medic school year " + year + " at age " + character.age)
+						if (year < YEARS_MEDICSCHOOL) {
+							fnAddSkillLevels(character,"Medic",year,true);
+							return EDUCATION_RESULT.inprogress;
+						}
+					}
+				}
+
+				// graduate medic school
+				if (character.characteristics[EDU] < 10){
+					character.characteristics[EDU] = 10;
+				} else {
+					character.characteristics[EDU]++;
+				}
+				// by the rules you only get medic skill 4 for successfully completing medic school (not one level per year)
+				// however that means a 'in medic school' agelimit hit will have no medic skill, even though they may go on to complete okay?
+				// adjust such that if return in progress add representitive levels of medic
+				fnAddSkillLevels(character,"Medic",YEARS_MEDICSCHOOL,true);
+
+				log("end medic school", DEBUG_LEVELS.verbose);
+				character.history += ", graduate Medic school at age " + character.age + "\n";
+				return EDUCATION_RESULT.success;
+			}
+
+			function fnTryLawSchool(character){
+				// requires two successes
+				log("try enrol law school", DEBUG_LEVELS.verbose);
+				if (roll(character,INT,EDU) === false){
+					return EDUCATION_RESULT.fail;
+				}
+
+				log("start law school");
+				character.history += "Law school start at age " + character.age;
+
+				var passes = 0;
+				for ( var year=1; year <= YEARS_LAWSCHOOL; year++ ){
+					log( "law school year " + year, DEBUG_LEVELS.verbose);
+					if (roll(character,INT,EDU) === true){
+						passes++;
+						log( "pass law school year " + year, DEBUG_LEVELS.verbose);
+					} else {
+						log( "fail law school year " + year, DEBUG_LEVELS.verbose);
+						fnAge(character);
+						log( "dropout law school at year " + year);
+						character.history += ", dropped out during year " + year + " at age " + character.age + "\n";
+						return EDUCATION_RESULT.dropout;
+					}
+					if (fnAge(character) == false){
+						log("agelimit reached, at end of law school year " + year + " at age " + character.age)
+						if (year < YEARS_LAWSCHOOL) {
+							// again strictly should not add skill levels until succesfully completing law school - but we are stopping whilst it is in progress due to agelimit being hit during law school
+							fnAddSkillLevels(character,"Advocate",year,true);
+							return EDUCATION_RESULT.inprogress;
+						}
+					}
+				}
+
+				// graduate law school
+				if (character.characteristics[EDU] < 10){
+					character.characteristics[EDU] = 10;
+				} else {
+					character.characteristics[EDU]++;
+				}
+				fnAddSkillLevels(character,"Advocate",YEARS_LAWSCHOOL,true);
+
+				log("end law school", DEBUG_LEVELS.verbose);
+				character.history += ", graduate Law school at age " + character.age + "\n";
+				return EDUCATION_RESULT.success;
+			}
+
+			function fnTryTradeSchool(character){
+				log("try to enrol in trade school", DEBUG_LEVELS.verbose);
+				if(roll(character, INT) == false){
+					log("fail trade school");
+					return EDUCATION_RESULT.fail;
+				}
+
+				log("start trade school");
+				character.history += "Trade school start at age " + character.age;
+
+				if (character.major != null){
+					// check if major is in trade school skills and use that
+					// else choose a new major for trade school
+					// should we keep track of this ...
+					if (aTradeSchool.indexOf(character.major)<0){
+						log( "changing major from " + character.major, DEBUG_LEVELS.verbose);
+						character.major = fnRandomFromArray(aTradeSchool);
+						log( " to " + character.major, DEBUG_LEVELS.verbose);
+						character.history += ", major in " + character.major;
+					}
+				} else {
+					character.major = fnRandomFromArray(aTradeSchool);
+					character.history += ", major in " + character.major;
+					log("selecting trade school major (no minor) " + character.major, DEBUG_LEVELS.verbose);
+				}
+
+				log("roll to pass trade school",DEBUG_LEVELS.debug);
+				if(roll(character,INT,EDU) == false){
+					log("dropout of trade school");
+					character.history += ", dropped out at age " + character.age + "\n";
+					return EDUCATION_RESULT.dropout;
+				}
+
+				// honors possible ? reference book 1, page 72, section C, basic education, "Trade School (Major, Honors)"
+				fnAddSkill(character,character.major,false,true);
+				fnAddSkill(character,character.major,false,true);
+				fnAge(character);
+
+				log("end trade school", DEBUG_LEVELS.verbose);
+				character.history += ", graduate Trade school at age " + character.age + "\n";
+				return EDUCATION_RESULT.success
+			}
+
+			function fnEducation(character){
+				character.major = null;
+				character.minor = null;
+				
+				// first try ED5
+				character.ed5 = fnEd5(character);
+
+				// try university if edu 7+ and probability hit
+				character.university = EDUCATION_RESULT.nostart;
+				if (character.characteristics[EDU] > 6){
+					if (Math.random() < PROB_TRY_UNIVERSITY){
+						character.university = fnTryUniversity(character);
+					} else {
+						log("could have tried university but didn't want to", DEBUG_LEVELS.verbose);
+					}
+				}
+				if (fnAgeLimitReached(character)) return;
+
+				// try college if didn't attend or succeed at Uni, edu 5+ and probability hit
+				character.college = EDUCATION_RESULT.nostart;
+				if (character.university < EDUCATION_RESULT.success){
+					if (character.characteristics[EDU] > 4){
+						if(Math.random() < PROB_TRY_COLLEGE){
+							character.college = fnTryCollege(character);
+						} else {
+							log("could have tried college but didn't want to", DEBUG_LEVELS.verbose);
+						}
+					}
+				}
+				if (fnAgeLimitReached(character)) return;
+
+				// if BA then try for Honors
+				character.honors = EDUCATION_RESULT.nostart;
+				if (character.college == EDUCATION_RESULT.success | character.university == EDUCATION_RESULT.success){
+					character.honors = fnTryHonors(character);
+				}
+
+				// if BA then try for MA ? 
+				// conditional on Medic or Law school ?
+				character.masters = EDUCATION_RESULT.nostart;
+				if (character.college == EDUCATION_RESULT.success | character.university == EDUCATION_RESULT.success){
+					if(Math.random() < PROB_TRY_MASTERS){
+						character.masters = fnTryMasters(character);
+					} else {
+						log("could have tried masters but didn't want to", DEBUG_LEVELS.verbose);
+					}
+				}
+				if (fnAgeLimitReached(character)) return;
+
+				character.professors = EDUCATION_RESULT.nostart;
+				if (character.masters == EDUCATION_RESULT.success){
+					if(Math.random() < PROB_TRY_PROFFESORS){
+						character.professors = fnTryProfessors(character);
+					} else {
+						log("could have tried professors but didn't want to", DEBUG_LEVELS.verbose);
+					}
+				}
+				if (fnAgeLimitReached(character)) return;
+
+				// if honors then try law or medical school - bonus probability for relevant major/minor ?
+				character.medicSchool = EDUCATION_RESULT.nostart;
+				character.lawSchool = EDUCATION_RESULT.nostart;
+
+				if (character.honors == EDUCATION_RESULT.success){
+					let probMedic = PROB_TRY_MEDIC;
+					if (aMedicSchool.indexOf(character.major) > -1){
+						probMedic += PROB_MAJOR_BONUS;
+					} else if (aMedicSchool.indexOf(character.minor)>-1){
+						probMedic += PROB_MINOR_BONUS;
+					}
+					if (Math.random() < probMedic){
+						character.medicSchool = fnTryMedicSchool(character);
+					} else {
+						log("could have tried medic school but didn't want to", DEBUG_LEVELS.verbose);
+					}
+					if (fnAgeLimitReached(character)) return;
+
+					if (character.medicSchool < EDUCATION_RESULT.success){
+						let probLaw = PROB_TRY_LAW;
+						if (aLawSchool.indexOf(character.major) > -1){
+							probLaw += PROB_MAJOR_BONUS;
+						} else if (aLawSchool.indexOf(character.minor)>-1){
+							probLaw += PROB_MINOR_BONUS;
+						}
+						if (Math.random() < probLaw){
+							character.lawSchool = fnTryLawSchool(character);
+						} else {
+							log("could have tried law school but didn't want to", DEBUG_LEVELS.verbose);
+						}
+					}
+				}
+				if (fnAgeLimitReached(character)) return;
+
+				// else try trade school if edu 5+
+				character.tradeschool = EDUCATION_RESULT.nostart;
+				if (character.characteristics[EDU] > 4){
+					if (character.college < EDUCATION_RESULT.success & character.university < EDUCATION_RESULT.success){
+						// didn't do, failed or dropped out of university and college i.e. no further education
+						// try for trade school
+						character.tradeschool = fnTryTradeSchool(character);
+					}
+				}
+
+				// clean up education languages
+				if (LANGUAGE in character.skills){
+					log("Converting langauge education into languages", DEBUG_LEVELS.verbose);
+					let points = character.skills[LANGUAGE] * 2;
+					let count = 1;
+					while (points > MAX_SKILL){
+						lang = "Language (" + eHex(count + 9) + ")";
+						log("adding " + MAX_SKILL + " levels in " + lang, DEBUG_LEVELS.verbose);
+						character.skills[lang] = MAX_SKILL;
+
+						points -= MAX_SKILL;
+						count++;
+					}
+					lang = "Language (" + eHex(count + 9) + ")";
+					character.languages = count;
+					log("adding " + points + " levels in " + lang, DEBUG_LEVELS.verbose);
+					character.skills[lang] = points;
+
+					// clear LANGUAGE
+					delete character.skills[LANGUAGE]; 
+				}
+
+				log("education complete", DEBUG_LEVELS.verbose);
+			}
+
+			function fnEducationToString(character){
+				if (character.medicSchool == EDUCATION_RESULT.inprogress) return "in medic school";
+				if (character.lawSchool == EDUCATION_RESULT.inprogress) return "in law school";
+				if (character.professors == EDUCATION_RESULT.inprogress) return "in professors";
+				if (character.masters == EDUCATION_RESULT.inprogress) return "in masters";
+				if (character.college == EDUCATION_RESULT.inprogress) return "in college";
+				if (character.university == EDUCATION_RESULT.inprogress) return "in univerity";
+				
+				if (character.medicSchool == EDUCATION_RESULT.success) return "Doctor";
+				if (character.lawSchool == EDUCATION_RESULT.success) return "Attorney";
+				if (character.professors == EDUCATION_RESULT.success) return "PhD";
+				if (character.masters == EDUCATION_RESULT.success) return "MA";
+
+				if (character.university == EDUCATION_RESULT.success){
+					if (character.honors == EDUCATION_RESULT.success){
+						return "University BA Hons";
+					} else {
+						return "University BA";
+					}
+				}
+
+				if (character.college == EDUCATION_RESULT.success){
+					if (character.honors == EDUCATION_RESULT.success){
+						return "College BA Hons";
+					} else {
+						return "College BA";
+					}
+				}
+
+				if (character.tradeschool == EDUCATION_RESULT.success){
+					return "Trade school";
+				}
+
+
+
+				if (character.university == EDUCATION_RESULT.dropout) return "University dropout";
+				if (character.college == EDUCATION_RESULT.dropout) return "College dropout";
+
+				return "None";
+			}
+
+			function fnCitizen(character){
+				character.job = null;
+				character.hobby = null;
+				// choose job if major or minor try against edu to take that as job
+				// choose hobby if major or minor try against edu to take that as hobby
+				// CHANGE FROM RULES : do similar is successfully completed medic school or law school first
+
+				if (character.medicSchool == EDUCATION_RESULT.success){
+					if(Math.random() < PROB_MEDICLAW_JOB){
+						log("try for medic school job", DEBUG_LEVELS.verbose);
+						if (roll(character, EDU) == true){
+							character.job = fnRandomFromArray(aMedicSchool);
+						} else {
+							log("failed to get medic school job", DEBUG_LEVELS.verbose);
+						}
+					} else {
+						log("did not want medic school job", DEBUG_LEVELS.verbose);
+					}
+					
+					if (character.job == null){
+						if (Math.random() < (PROB_MEDICLAW_HOBBY + PROB_MOD_HOBBY)){
+							log("try for medic school hobby", DEBUG_LEVELS.verbose);
+							if (roll(character, EDU) == true){
+								character.hobby = fnRandomFromArray(aMedicSchool);
+							} else {
+								log("failed to get medic school hobby", DEBUG_LEVELS.verbose);
+							}
+						} else {
+							log("did not want medic school hobby", DEBUG_LEVELS.verbose);
+						}
+					} else {
+						if (Math.random() < (PROB_MEDICLAW_HOBBY)){
+							log("try for medic school hobby", DEBUG_LEVELS.verbose);
+							if (roll(character, EDU) == true){
+								character.hobby = fnRandomFromArray(aMedicSchool);
+							} else {
+								log("failed to get medic school hobby", DEBUG_LEVELS.verbose);
+							}
+						} else {
+							log("did not want medic school hobby", DEBUG_LEVELS.verbose);
+						}
+					}
+				} else if (character.lawSchool == EDUCATION_RESULT.success){
+					if(Math.random() < PROB_MEDICLAW_JOB){
+						log("try for law school job", DEBUG_LEVELS.verbose);
+						if (roll(character, EDU) == true){
+							character.job = fnRandomFromArray(aLawSchool);
+						} else {
+							log("failed to get law school job", DEBUG_LEVELS.verbose);
+						}
+					} else {
+						log("did not want law school job", DEBUG_LEVELS.verbose);
+					}
+					
+					if (character.job == null){
+						if (Math.random() < (PROB_MEDICLAW_HOBBY + PROB_MOD_HOBBY)){
+							log("try for law school hobby", DEBUG_LEVELS.verbose);
+							if (roll(character, EDU) == true){
+								character.hobby = fnRandomFromArray(aLawSchool);
+							} else {
+								log("failed to get law school hobby", DEBUG_LEVELS.verbose);
+							}
+						} else {
+							log("did not want law school hobby", DEBUG_LEVELS.verbose);
+						}
+					} else {
+						if (Math.random() < (PROB_MEDICLAW_HOBBY)){
+							log("try for law school hobby", DEBUG_LEVELS.verbose);
+							if (roll(character, EDU) == true){
+								character.hobby = fnRandomFromArray(aLawSchool);
+							} else {
+								log("failed to get medic school hobby", DEBUG_LEVELS.verbose);
+							}
+						} else {
+							log("did not want law school hobby", DEBUG_LEVELS.verbose);
+						}
+					}
+				}
+
+				if (character.major != null){
+					// due to trade school possible to be here with major but without minor
+					if (character.job == null){
+						if (Math.random() < PROB_MAJOR_JOB){
+							log("try for major job", DEBUG_LEVELS.verbose);
+							if (roll(character, EDU) == true){
+								character.job = character.major;
+							} else {
+								log("failed to get major job", DEBUG_LEVELS.verbose);
+							}
+						} else if (character.minor != null){
+							log("try for minor job", DEBUG_LEVELS.verbose);
+							if (roll(character, EDU) == true){
+								character.job = character.minor;
+							} else {
+								log("failed to get minor job", DEBUG_LEVELS.verbose);
+							}
+						} else {
+							log("did not want major job - no minor", DEBUG_LEVELS.verbose);
+						}
+					}
+
+					if (character.hobby == null){
+						if (character.job != character.major){
+							if (Math.random() < (PROB_MAJOR_HOBBY + PROB_MOD_HOBBY)){
+								log("try for major hobby", DEBUG_LEVELS.verbose);
+								if (roll(character, EDU) == true){
+									character.hobby = character.major;
+								} else {
+									log("failed to get major hobby", DEBUG_LEVELS.verbose);
+								}
+							} else if (character.minor != null){
+								log("try for minor hobby", DEBUG_LEVELS.verbose);
+								if (roll(character, EDU) == true){
+									character.hobby = character.minor;
+								} else {
+									log("failed to get minor hobby", DEBUG_LEVELS.verbose);
+								}
+							} else {
+								log("did not want major hobby - no minor", DEBUG_LEVELS.verbose);
+							}
+						} else {
+							if (Math.random() < PROB_MAJOR_HOBBY){
+								log("try for major hobby", DEBUG_LEVELS.verbose);
+								if (roll(character, EDU) == true){
+									character.hobby = character.major;
+								} else {
+									log("failed to get major hobby", DEBUG_LEVELS.verbose);
+								}
+							} else if (character.minor != null){
+								log("try for minor hobby", DEBUG_LEVELS.verbose);
+								if (roll(character, EDU) == true){
+									character.hobby = character.minor;
+								} else {
+									log("failed to get minor hobby", DEBUG_LEVELS.verbose);
+								}
+							} else {
+								log("did not want major hobby - no minor", DEBUG_LEVELS.verbose);
+							}
+						}
+					}
+				} 
+
+				if (character.job == null){
+					log("choose random job");
+					character.job = fnRandomFromArray(aCitizenSkills);
+				}
+
+				if (character.hobby == null){
+					log("choose random hobby");
+					character.hobby = fnRandomFromArray(aCitizenSkills);
+				}
+
+				// fix GRAV knowledge in aCitizenSkills - choose random skill from Driver, Flyer and Seafarer
+				if (character.job === GRAV){
+					character.job = fnRandomFromArray(aGrav) + ":Grav";
+				}
+				if (character.hobby === GRAV){
+					character.hobby = fnRandomFromArray(aGrav) + ":Grav";
+				}
+
+				log("job : '" + character.job + "'");
+				log("hobby : '" + character.hobby + "'");
+
+				var term = 1;
+				
+				while( (fnAgeLimitReached(character) == false) & (character.dead == false) & (character.retired == false) ){
+					if (character.aCheck === undefined){
+						// for each term we want to check STR, DEX, END, INT in highest order
+						// if array is not built or empty then rebuild
+						character.aCheck = new Array(STR,DEX,END,INT);
+					} else {
+						if (character.aCheck.length < 1){
+							character.aCheck = new Array(STR,DEX,END,INT);
+						}
+					}
+					log("start term " + term, DEBUG_LEVELS.debug);
+					// add skills
+					for ( var s = 0; s<4; s++ ){
+						// random choices .. todo something better
+						column = fnRandomFromObject(oCitizenSkills);
+						selection = fnRandomFromArray(column);
+						log("citizen life adds " + selection, DEBUG_LEVELS.verbose);
+						if ( aCharacteristics.indexOf(selection) > -1 ){
+							character.characteristics[selection] ++;
+						} else  {
+							fnAddSkill(character,selection);
+						}
+					}
+
+					// check citizen life, add job/hobby according to term
+					log("roll to pass citizen life term " + term,DEBUG_LEVELS.debug);
+					if (term === 1){
+						// term 1
+						if (roll(character,fnPopHighestCharacteristic(character))){
+							fnAddSkillLevels(character,character.job, 4);
+						}
+					} else if (term === 2){
+						// term 2
+						if (roll(character,fnPopHighestCharacteristic(character))){
+							fnAddSkillLevels(character,character.hobby, 2);
+						}
+					} else if (term % 2 == 0){
+						// term 4,6,8 ...
+						if (roll(character,fnPopHighestCharacteristic(character))){
+							fnAddSkill(character,character.hobby);
+						}
+					} else {
+						// term 3,5,7 ...
+						if (roll(character,fnPopHighestCharacteristic(character))){
+							fnAddSkill(character,character.job);
+						}
+					}
+
+					// add age
+					fnAge(character, 4);
+
+					if (D6(2)>10){
+						log("fail citizen life");
+						break;
+					}
+					term++;
+				}
+				log("citizen life ends at end of term " + term);
+
+/**
+				// muster out 
+				// for every citizen term
+				if (character.dead == false){
+					for (let i = 0; i< term; i++){
+
+					}
+				}
+/**/
+				return term;
+			}
+
+			// Generate a character
+			function fnGenerateCharacter(homeworld, agelimit=DEFAULT_AGELIMIT){
+				// a character
+				var character = new Object;
+				character.agelimit = agelimit;
+				character.history = "";
+				character.majorillness = false;
+				character.dead = false;
+				character.retired = false;
+
+				// generate initial characteristics
+				character.characteristics = new Object;
+				character.genetics = new Object;
+				fnGenerateCharacteristics(character);
+				character.startingEducation = character.characteristics[EDU];
+
+				// choose homeworld
+				fnChooseHomeworld(character, homeworld);
+
+				character.skills = new Object;
+				character.knowledge = new Object;
+				character.oknown = new Object;
+
+				// when picking a skill from a list prefer to build on previous skill
+				character.trade = null;
+				character.art = null;
+				character.soldier = null;
+				character.starship = null;
+				character.science = null;
+
+				fnAddDefaultAndHomeworldSkills(character);
+				character.age = 18;
+
+				// use waiver whenever you can - use this on chance?
+				character.waiver = character.characteristics["Social Standing"];
+
+				// begin education
+				fnEducation(character);
+
+				character.terms = 0;
+				if (fnAgeLimitReached(character) === false){
+					// begin life as citizen
+					character.terms = fnCitizen(character);
+				}
+
+				// deal with Language gained in Citizen life
+				// native language is given at initial Education level
+				// every level adds a language or increases a currently known language to a max of current education ? including native ?
+				character.skills["Language (Native)"] = character.startingEducation;
+				if (LANGUAGE in character.skills){
+					let langlevel = character.skills[LANGUAGE];
+					// clear language
+					delete character.skills[LANGUAGE];
+					for (i = 1; i <= langlevel; i++){
+						if (character.startingEducation - i  < 3){
+							// find a language to increase ?
+							for (skillname in character.skills){
+								if (skillname.slice(0,10) == "Language ("){
+									if (character.skills[skillname] < character.characteristics[EDU]){
+										character.skills[skillname]++;
+										log("incrementing " + skillname + " to " + character.skills[skillname]);
+										break;
+									}
+								}
+							}
+						} else {
+							character.languages++;
+							let lang = "Language (" + eHex(character.languages + 9) + ")";
+							character.skills[lang] = character.startingEducation - (i + 1);
+							log("adding " + lang + " at level " + character.skills[lang]);
+						}
+					}
+				}
+
+				// final console log if debug is set to anything greater than silent (the only console output when on quiet)
+				log(fnCharacterToString(character), DEBUG_LEVELS.quiet);
+
+				return character;
+			}
+
+			function fnCharacterToString(character){
+				sout = fnObjectToHex("UPP",character.characteristics);
+				sout += fnObjectToHex("DNA",character.genetics);
+				sout += "Homeworld : " + character.homeworld.WorldName + "\n";
+				sout += "Education : " + fnEducationToString( character ) + "\n";
+				sout += character.history;
+				sout += "Age : " + character.age + "\n";
+				sout += "Citizen job : " + character.job + "\n";
+				sout += "Citizen hobby : " + character.hobby + "\n";
+				sout += "Citizen terms : " + character.terms + "\n";
+				sout += fnObjectToString("Skills",character.skills, ", ");
+				sout += "\n";
+				sout += fnObjectToString("Knowledge",character.knowledge, ", ");
+
+				return sout;
+			}
+		</script>
+	</head>
+	<body>
+		<h1>T5 Random Citizen Generator</h1>
+		<script type="text/javascript">
+			txt = document.createElement("textarea");
+//			txt.cols = 160;
+			txt.rows = 20;
+			txt.style.width="98%";
+			txt.readOnly = true;
+			for ( i=0; i<16; i++ ){
+				// call fnGenerateCharaacter with 
+				//     undefined homeworld (random one will be chosen),
+				//     and max(ish) age of 45 (bail after this age occurs or citizen life fails)
+				char = fnGenerateCharacter(undefined,45);
+				txt.value += fnCharacterToString(char);
+				txt.value += "\n\n\n";
+			}
+			document.body.appendChild(txt);
+		</script>
+		<p>The Traveller game in all forms is owned by Far Future Enterprises. Copyright 1977 – 2008 Far Future Enterprises. Traveller is a registered trademark of Far Future Enterprises. Far Future permits web sites and fanzines for this game, provided it contains this notice, that Far Future is notified, and subject to a withdrawal of permission on 90 days notice. The contents of this site are for personal, non-commercial use only. Any use of Far Future Enterprises’s copyrighted material or trademarks anywhere on this web site and its files should not be viewed as a challenge to those copyrights or trademarks. In addition, any program/articles/file on this site cannot be republished or distributed without the consent of the author who contributed it.</p>
+	</body>
+</html>
+<!-- The Traveller game in all forms is owned by Far Future Enterprises. Copyright 1977 – 2008 Far Future Enterprises. -->
