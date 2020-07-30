@@ -1589,6 +1589,9 @@
 					let langlevel = character.skills[LANGUAGE];
 					// clear language
 					delete character.skills[LANGUAGE];
+					if (character.languages === undefined){
+						character.languages = 0;
+					}
 					for (i = 1; i <= langlevel; i++){
 						if (character.startingEducation - i  < 3){
 							// find a language to increase ?
