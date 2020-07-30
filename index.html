@@ -77,6 +77,7 @@
 			// book 1, page 58
 			const aGenetics = new Array( STR,DEX,END,INT);
 			// book 1, page 56
+            const homeworlds = [ "Random", "Alell", "Boughene", "Capital", "Dorannia", "Efate", "Feri", "Magash", "Hefry", "Jenghe", "Earth", "Lakou", "Macene Belt", "Knorbes", "Preslin", "Yori", "Regina", "Ruie", "Tremous Dex", "Uakye", "Vland", "Wroclaw", "Menorb", "Yorbund", "Traltha", "Dentus", "Vanzeti", "Syr Darya", "Aramis", "Rhylanor", "Raschev", "Ara Pacis", "Roup", "Pax Rulin", "Born in deep space" ];
 			const oHomeWorlds = {
 				"Alell":{WorldName:"Alell",Hex:"1706",Sector:"Spin",UWP:"B56789C-A",TradeClass:"Ph Pa Ri"},
 				"Boughene":{WorldName:"Boughene",Hex:"1904",Sector:"Spin",UWP:"A8B3531-D",TradeClass:"Fl Ni"},
@@ -626,8 +627,9 @@
 				if (homeworld === undefined){
 					character.homeworld = fnRandomFromObject(oHomeWorlds);
 				} else {
-					if (homeworld in oHomeWorlds){
-						character.homeworld = oHomeWorlds[homeworld];
+					var shomeworld = homeworlds[homeworld];
+					if (shomeworld in oHomeWorlds){
+						character.homeworld = oHomeWorlds[shomeworld];
 					} else {
 						character.homeworld = fnRandomFromObject(oHomeWorlds);
 					}
@@ -958,7 +960,10 @@
 					}
 					if (fnAge(character) == false){
 						log("agelimit reached, at end of professors year " + year + " at age " + character.age)
-						if (year < YEARS_PROFESSORS) return EDUCATION_RESULT.inprogress;
+						if (year < YEARS_PROFESSORS) {
+							character.history += ", still in professors\n";
+							return EDUCATION_RESULT.inprogress;
+						}
 					}
 				}
 
@@ -1001,6 +1006,7 @@
 						log("agelimit reached, at end of medic school year " + year + " at age " + character.age)
 						if (year < YEARS_MEDICSCHOOL) {
 							fnAddSkillLevels(character,"Medic",year,true);
+							character.history += ", still in medic school\n";
 							return EDUCATION_RESULT.inprogress;
 						}
 					}
@@ -1050,6 +1056,7 @@
 						if (year < YEARS_LAWSCHOOL) {
 							// again strictly should not add skill levels until succesfully completing law school - but we are stopping whilst it is in progress due to agelimit being hit during law school
 							fnAddSkillLevels(character,"Advocate",year,true);
+							character.history += ", still in law school\n";
 							return EDUCATION_RESULT.inprogress;
 						}
 					}
@@ -1612,35 +1619,226 @@
 
 				return sout;
 			}
+			
+            // user interface utility functions
+            function addOptions( toSelectId, fromArray ){
+                ele = document.getElementById(toSelectId);
+                for (arrayIndex in fromArray){
+                    opt = document.createElement("option");
+                    txt = document.createTextNode(fromArray[arrayIndex]);
+                    opt.appendChild(txt);
+                    opt.value = arrayIndex;
+                    ele.appendChild(opt);
+                }
+            }
+
+            // read any query string parameters
+            // https://stackoverflow.com/questions/901115/how-can-i-get-query-string-values-in-javascript
+            let urlParams = {};
+            (window.onpopstate = function () {
+                let match,
+                    pl = /\+/g,  // Regex for replacing addition symbol with a space
+                    search = /([^&=]+)=?([^&]*)/g,
+                    decode = function (s) {
+                        return decodeURIComponent(s.replace(pl, " "));
+                    },
+                    query = window.location.search.substring(1);
+
+                while (match = search.exec(query)) {
+                    if (decode(match[1]) in urlParams) {
+                        if (!Array.isArray(urlParams[decode(match[1])])) {
+                            urlParams[decode(match[1])] = [urlParams[decode(match[1])]];
+                        }
+                        urlParams[decode(match[1])].push(decode(match[2]));
+                    } else {
+                        urlParams[decode(match[1])] = decode(match[2]);
+                    }
+                }
+            })();
+
+            function fnHandleQueryParameters() {
+                // handle url query parameters - if none set defaults
+                if (urlParams.age) {
+					if (urlParams.age < 18) urlParams.age = 18;
+                    document.getElementById("age").value = urlParams.age;
+                } else {
+                    document.getElementById("age").value = 45;
+                }
+				
+                if (urlParams.homeworld) {
+                    document.getElementById("homeworld").options.selectedIndex = urlParams.homeworld;
+                } else {
+                    document.getElementById("homeworld").options.selectedIndex = 0;
+                }
+
+                if (urlParams.count) {
+					if (urlParams.count < 1) urlParams.count = 1;
+                    document.getElementById("count").value = urlParams.count;
+                } else {
+                    document.getElementById("count").value = 1;
+                }
+            }
+			
+			function fnSubmit() {
+				var count = parseInt(document.getElementById("count").value);
+				if (count < 2) {
+					var char =  fnGenerateCharacter( document.getElementById("homeworld").options.selectedIndex, document.getElementById("age").value );
+					document.getElementById("output").value = fnCharacterToString(char);
+				} else {
+					var out = "";
+					for ( i=0; i<count; i++ ){
+						var char = fnGenerateCharacter( document.getElementById("homeworld").options.selectedIndex, document.getElementById("age").value );
+						out += fnCharacterToString(char);
+						out += "\n\n\n";
+					}
+					document.getElementById("output").value = out;
+				}
+			}
 		</script>
+        <style>
+            * {
+                box-sizing: border-box;
+                font-size: medium;
+            }
+
+            h1 {
+                text-align: center;
+                font-size: large;
+                font-weight: bold;
+            }
+
+            input[type=number], select, textarea {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid black;
+                border-radius: 4px;
+                box-sizing: border-box;
+                resize: vertical;
+                background-color: white;
+            }
+
+            label {
+                width: 100%;
+                padding: 8px 8px 8px 0;
+                display: inline-block;
+                text-align: right;
+                font-size: medium;
+            }
+
+            input[type=submit] {
+                background-color: lightgreen;
+                color: black;
+                padding: 8px 20px;
+                border: 1px solid black;
+                border-radius: 4px;
+                cursor: pointer;
+                float: right;
+            }
+
+            input[type=submit]:hover {
+                background-color: lawngreen;
+            }
+
+            .container {
+                background-color: ghostwhite;
+                padding: 20px;
+            }
+
+            p {
+                text-align: justify;
+                font-size: smaller;
+            }
+
+            .col-right {
+                float: left;
+                width: 60%;
+                margin-top: 6px;
+            }
+
+            .col-left {
+                float: left;
+                width: 40%;
+                margin-top: 6px;
+            }
+			
+
+            /* Clear floats after the columns */
+            .row:after {
+                content: "";
+                display: table;
+                clear: both;
+            }
+
+            /* Responsive layout - when the screen is less than 600px wide, make the two columns stack on top of each other instead of next to each other */
+            @media (max-width: 600px) {
+                .col-left, .col-right, input[type=submit], p, h1 {
+                    width: 100%;
+                    margin-top: 0;
+                }
+            }
+        </style>
 	</head>
 	<body>
-		<h1>T5 Random Citizen Generator</h1>
-		<script type="text/javascript">
-			txt = document.createElement("textarea");
-//			txt.cols = 160;
-			txt.rows = 20;
-			txt.style.width="98%";
-			txt.readOnly = true;
-			for ( i=0; i<16; i++ ){
-				// call fnGenerateCharaacter with 
-				//     undefined homeworld (random one will be chosen),
-				//     and max(ish) age of 45 (bail after this age occurs or citizen life fails)
-				char = fnGenerateCharacter(undefined,45);
-				txt.value += fnCharacterToString(char);
-				txt.value += "\n\n\n";
-			}
-			document.body.appendChild(txt);
+        <div class="container">
+			<h1>T5 Random Citizen Generator</h1>
+			<p>
+				Generate a number of random citizens.  
+				Age parameter, starting at age 18, is used to determine when to end citizen life,  
+				which may prematurely end due to failing a citizen life term or death.
+				Generated characters may be older than the age parameter due to the generator 
+				not stopping immediately when in the middle of a citizen life term.
+				By default retriement automatically occurs around age 66.  
+			</p>
+            <form action="#" target="_self" onsubmit="fnSubmit()">
+                <div class="row">
+					<div class="col-left">
+						<label id="age_label" name="age_label">Age</label>
+					</div>
+					<div class="col-right">
+						<input type="number" id="age" name="age">
+					</div>
+				</div>
+                <div class="row">
+					<div class="col-left">
+						<label id="homeworld_label" name="homeworld_label">Home world</label>
+					</div>
+					<div class="col-right">
+						<select id="homeworld" name="homeworld"></select>
+					</div>
+				</div>
+                <div class="row">
+					<div class="col-left">
+						<label id="count_label" name="age_label">Number</label>
+					</div>
+					<div class="col-right">
+						<input type="number" id="count" name="count">
+					</div>
+				</div>
+                <div class="row">
+					<div class="col-left"></div>
+					<div class="col-right">
+						<input type="submit" value="submit">
+					</div>
+				</div>
+            </form>
+                <div class="row">
+                    <div class="col-left">
+                        The Traveller game in all forms is owned by Far Future Enterprises. Copyright 1977 &ndash; 2020 Far Future Enterprises. 
+                        Traveller is a registered trademark of Far Future Enterprises. Far Future permits web sites and fanzines for this game, 
+                        provided it contains this notice, that Far Future is notified, and subject to a withdrawal of permission on 90 days notice. 
+                        The contents of this page are for personal, non-commercial use only. Any use of Far Future Enterprises&rsquo;s copyrighted 
+                        material or trademarks anywhere on this web page and its file should not be viewed as a challenge to those copyrights 
+                        or trademarks. In addition, this program/file on this site cannot be republished or distributed without the consent 
+                        of the author who contributed it.
+                    </div>
+                <div class="col-right"><textarea rows="20" id="output" name="output" readonly="true"></textarea></div>
+        </div>
+        <script type="text/javascript">
+            // prepare the input form
+            addOptions( "homeworld", homeworlds );
+            fnHandleQueryParameters();
+			fnSubmit();
 		</script>
-		<p>
-			The Traveller game in all forms is owned by Far Future Enterprises. Copyright 1977 &ndash; 2008 Far Future Enterprises. 
-			Traveller is a registered trademark of Far Future Enterprises. Far Future permits web sites and fanzines for this game, 
-			provided it contains this notice, that Far Future is notified, and subject to a withdrawal of permission on 90 days notice. 
-			The contents of this site are for personal, non-commercial use only. Any use of Far Future Enterprises&rsquo;s copyrighted 
-			material or trademarks anywhere on this web site and its files should not be viewed as a challenge to those copyrights or 
-			trademarks. In addition, any program/articles/file on this site cannot be republished or distributed without the consent of 
-			the author who contributed it.
-		</p>
 	</body>
 </html>
 <!-- The Traveller game in all forms is owned by Far Future Enterprises. Copyright 1977 – 2008 Far Future Enterprises. -->
