@@ -1592,8 +1592,8 @@
 					if (character.languages === undefined){
 						character.languages = 0;
 					}
-					for (i = 1; i <= langlevel; i++){
-						if (character.startingEducation - i  < 3){
+					for (ilang = 1; ilang <= langlevel; ilang++){
+						if (character.startingEducation - ilang  < 3){
 							// find a language to increase ?
 							for (skillname in character.skills){
 								if (skillname.slice(0,10) == "Language ("){
@@ -1607,7 +1607,7 @@
 						} else {
 							character.languages++;
 							let lang = "Language (" + eHex(character.languages + 9) + ")";
-							character.skills[lang] = character.startingEducation - (i + 1);
+							character.skills[lang] = character.startingEducation - (ilang + 1);
 							log("adding " + lang + " at level " + character.skills[lang]);
 						}
 					}
@@ -1702,7 +1702,7 @@
 					document.getElementById("output").value = fnCharacterToString(char);
 				} else {
 					var out = "";
-					for ( i=0; i<count; i++ ){
+					for ( icount = 0; icount < count; icount++ ){
 						var char = fnGenerateCharacter( document.getElementById("homeworld").options.selectedIndex, document.getElementById("age").value );
 						out += fnCharacterToString(char);
 						out += "\n\n\n";
