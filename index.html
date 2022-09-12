@@ -90,7 +90,7 @@
 			// book 1, page 58
 			const aGenetics = new Array( STR,DEX,END,INT);
 			// book 1, page 56
-            const homeworlds = [ "Random", "Alell", "Boughene", "Capital", "Dorannia", "Efate", "Feri", "Magash", "Hefry", "Jenghe", "Earth", "Lakou", "Macene Belt", "Knorbes", "Preslin", "Yori", "Regina", "Ruie", "Tremous Dex", "Uakye", "Vland", "Wroclaw", "Menorb", "Yorbund", "Traltha", "Dentus", "Vanzeti", "Syr Darya", "Aramis", "Rhylanor", "Raschev", "Ara Pacis", "Roup", "Pax Rulin", "Born in deep space" ];
+                        const homeworlds = [ "Random", "Alell", "Boughene", "Capital", "Dorannia", "Efate", "Feri", "Magash", "Hefry", "Jenghe", "Earth", "Lakou", "Macene Belt", "Knorbes", "Preslin", "Yori", "Regina", "Ruie", "Tremous Dex", "Uakye", "Vland", "Wroclaw", "Menorb", "Yorbund", "Traltha", "Dentus", "Vanzeti", "Syr Darya", "Aramis", "Rhylanor", "Raschev", "Ara Pacis", "Roup", "Pax Rulin", "Born in deep space" ];
 			const oHomeWorlds = {
 				"Alell":{WorldName:"Alell",Hex:"1706",Sector:"Spin",UWP:"B56789C-A",TradeClass:"Ph Pa Ri"},
 				"Boughene":{WorldName:"Boughene",Hex:"1904",Sector:"Spin",UWP:"A8B3531-D",TradeClass:"Fl Ni"},
@@ -1694,23 +1694,23 @@
                     document.getElementById("count").value = 1;
                 }
             }
-			
-			function fnSubmit() {
-				var count = parseInt(document.getElementById("count").value);
-				if (count < 2) {
-					var char =  fnGenerateCharacter( document.getElementById("homeworld").options.selectedIndex, document.getElementById("age").value );
-					document.getElementById("output").value = fnCharacterToString(char);
-				} else {
-					var out = "";
-					for ( icount = 0; icount < count; icount++ ){
-						var char = fnGenerateCharacter( document.getElementById("homeworld").options.selectedIndex, document.getElementById("age").value );
-						out += fnCharacterToString(char);
-						out += "\n\n\n";
-					}
-					document.getElementById("output").value = out;
-				}
-			}
-		</script>
+
+            function fnSubmit() {
+                var count = parseInt(document.getElementById("count").value);
+                if (count < 2) {
+                    var char =  fnGenerateCharacter( document.getElementById("homeworld").options.selectedIndex, document.getElementById("age").value );
+                    document.getElementById("output").value = fnCharacterToString(char);
+                } else {
+                    var out = "";
+                    for ( icount = 0; icount < count; icount++ ){
+                        var char = fnGenerateCharacter( document.getElementById("homeworld").options.selectedIndex, document.getElementById("age").value );
+                        out += fnCharacterToString(char);
+                        out += "\n\n\n";
+                    }
+                    document.getElementById("output").value = out;
+                }
+            }
+        </script>
         <style>
             * {
                 box-sizing: border-box;
@@ -1741,7 +1741,7 @@
                 font-size: medium;
             }
 
-            input[type=submit] {
+            input[type=button] {
                 background-color: lightgreen;
                 color: black;
                 padding: 8px 20px;
@@ -1751,7 +1751,7 @@
                 float: right;
             }
 
-            input[type=submit]:hover {
+            input[type=button]:hover {
                 background-color: lawngreen;
             }
 
@@ -1787,7 +1787,7 @@
 
             /* Responsive layout - when the screen is less than 600px wide, make the two columns stack on top of each other instead of next to each other */
             @media (max-width: 600px) {
-                .col-left, .col-right, input[type=submit], p, h1 {
+                .col-left, .col-right, input[type=button], p, h1 {
                     width: 100%;
                     margin-top: 0;
                 }
@@ -1835,7 +1835,7 @@
                 <div class="row">
 					<div class="col-left"></div>
 					<div class="col-right">
-						<input type="submit" value="submit">
+						<input type="button" value="submit" onclick="fnSubmit()">
 					</div>
 				</div>
             </form>
@@ -1855,8 +1855,8 @@
             // prepare the input form
             addOptions( "homeworld", homeworlds );
             fnHandleQueryParameters();
-			fnSubmit();
-		</script>
+            fnSubmit();
+        </script>
 	</body>
 </html>
 <!--
